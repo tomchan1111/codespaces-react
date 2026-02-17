@@ -118,14 +118,11 @@ const ConfirmModal = ({title,message,onConfirm,onCancel,danger=true}) => (
 );
 
 export default function App() {
-  const [users, setUsers]       = useState(INITIAL_USERS);
+  const [users, setUsers]       = useState([]);
   const [passwords, setPasswords] = useState({});
-  const [currentUser, setCurrentUser] = useState(() => {
-    const savedId = loadLocal('leavesync_currentUserId', null);
-    return (savedId && INITIAL_USERS.find(u => u.id === savedId)) || INITIAL_USERS[0];
-  });
-  const [leaves, setLeaves]     = useState(initialLeaves);
-  const [duties, setDuties]     = useState(initialDuties);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [leaves, setLeaves]     = useState([]);
+  const [duties, setDuties]     = useState([]);
   const [auditLog, setAuditLog] = useState([]);
   const [cloudLoading, setCloudLoading] = useState(true);
   const [view, setView]         = useState("calendar");
@@ -183,19 +180,24 @@ export default function App() {
   // ── Load from cloud on mount ──
   useEffect(() => {
     loadCloud().then(data => {
-      if (data) {
-        if (data.users?.length)   setUsers(data.users);
-        if (data.passwords)       setPasswords(data.passwords);
-        if (data.leaves)          setLeaves(data.leaves);
-        if (data.duties)          setDuties(data.duties);
-        if (data.auditLog)        setAuditLog(data.auditLog);
-        // Restore currentUser from cloud user list + local device preference
-        const savedId = loadLocal('leavesync_currentUserId', null);
-        if (savedId && data.users) {
-          const found = data.users.find(u => u.id === savedId);
-          if (found) setCurrentUser(found);
-        }
-      }
+      // Use cloud data if available, otherwise fall back to hardcoded defaults (first-ever load)
+      const cloudUsers    = data?.users?.length ? data.users : INITIAL_USERS;
+      const cloudPasswords = data?.passwords ?? {};
+      const cloudLeaves   = data?.leaves ?? initialLeaves;
+      const cloudDuties   = data?.duties ?? initialDuties;
+      const cloudAuditLog = data?.auditLog ?? [];
+
+      setUsers(cloudUsers);
+      setPasswords(cloudPasswords);
+      setLeaves(cloudLeaves);
+      setDuties(cloudDuties);
+      setAuditLog(cloudAuditLog);
+
+      // Restore currentUser from cloud user list + local device preference
+      const savedId = loadLocal('leavesync_currentUserId', null);
+      const found = savedId && cloudUsers.find(u => u.id === savedId);
+      setCurrentUser(found || cloudUsers[0]);
+
       setCloudLoading(false);
       // Allow saves after initial load settles
       setTimeout(() => { skipSaveRef.current = false; }, 500);
@@ -203,18 +205,20 @@ export default function App() {
   }, []);
 
   // ── Persist currentUserId locally (device-specific) ──
-  useEffect(() => { saveLocal('leavesync_currentUserId', currentUser.id); }, [currentUser]);
+  useEffect(() => { if (currentUser) saveLocal('leavesync_currentUserId', currentUser.id); }, [currentUser]);
 
   // ── Debounced save to cloud on every shared-state change ──
   useEffect(() => {
     if (cloudLoading || skipSaveRef.current) return;
+    // Don't save if state is still empty (pre-cloud-load)
+    if (!users.length || !currentUser) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       lastSaveRef.current = Date.now();
       saveCloudData({ users, passwords, leaves, duties, auditLog });
     }, 500);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [users, passwords, leaves, duties, auditLog, cloudLoading]);
+  }, [users, passwords, leaves, duties, auditLog, cloudLoading, currentUser]);
 
   // ── Poll for updates from other users every 5 seconds ──
   useEffect(() => {
