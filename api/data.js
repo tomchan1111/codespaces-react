@@ -40,6 +40,7 @@ export default async function handler(req, res) {
         access: 'public',
         contentType: 'application/json',
         addRandomSuffix: false,
+        allowOverwrite: true,
       });
       return res.status(200).json({ ok: true });
     } catch (error) {
