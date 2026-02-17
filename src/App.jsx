@@ -13,22 +13,24 @@ const CLOUD_API = '/api/data';
 
 async function loadCloud() {
   try {
-    const res = await fetch(CLOUD_API);
+    // Cache-bust to avoid stale CDN/browser-cached responses
+    const res = await fetch(CLOUD_API + '?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) return null;
     return await res.json();
   } catch { return null; }
 }
 
 async function saveCloudData(data) {
-  try {
-    await fetch(CLOUD_API, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-  } catch (e) {
-    console.error('Cloud save failed:', e);
+  const res = await fetch(CLOUD_API, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => 'Unknown error');
+    throw new Error('Cloud save failed: ' + err);
   }
+  return await res.json();
 }
 
 const INITIAL_USERS = [
@@ -237,8 +239,9 @@ export default function App() {
       cloudSnapshotRef.current = JSON.stringify(data);
       setDirty(false);
       notify("Saved to cloud ✓", "green");
-    } catch {
-      notify("Save failed!", "red");
+    } catch (e) {
+      console.error('Save error:', e);
+      notify("Save failed: " + (e.message || "Unknown error"), "red");
     }
     setSaving(false);
   }

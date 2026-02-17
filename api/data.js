@@ -36,16 +36,19 @@ export default async function handler(req, res) {
   if (req.method === 'PUT') {
     try {
       const data = req.body;
-      await put(BLOB_KEY, JSON.stringify(data), {
+      if (!data || typeof data !== 'object') {
+        return res.status(400).json({ error: 'Invalid request body' });
+      }
+      const blob = await put(BLOB_KEY, JSON.stringify(data), {
         access: 'public',
         contentType: 'application/json',
         addRandomSuffix: false,
         allowOverwrite: true,
       });
-      return res.status(200).json({ ok: true });
+      return res.status(200).json({ ok: true, url: blob.url });
     } catch (error) {
       console.error('Error writing blob:', error);
-      return res.status(500).json({ error: 'Failed to save data' });
+      return res.status(500).json({ error: error.message || 'Failed to save data' });
     }
   }
 
