@@ -366,8 +366,8 @@ export default function App() {
   }
 
   // ── Calendar helpers ──
-  const myLeaves = leaves.filter(l=>l.userId===currentUser.id);
-  const myDuties = duties.filter(d=>d.userId===currentUser.id);
+  const myLeaves = leaves.filter(l=>l.userId===currentUser?.id);
+  const myDuties = duties.filter(d=>d.userId===currentUser?.id);
   const pendingLeaves = leaves.filter(l=>l.status==="Pending");
   const pendingDuties = duties.filter(d=>d.status==="Pending");
   const totalPending  = pendingLeaves.length + pendingDuties.length;
@@ -390,9 +390,9 @@ export default function App() {
   const navItems = [
     {key:"calendar",  label:"Team Calendar", icon:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"},
     {key:"my-leaves", label:"My Requests",   icon:"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"},
-    ...((currentUser.role==="manager"||currentUser.role==="admin")?[{key:"approvals",label:"Approvals",icon:"M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",badge:totalPending}]:[]),
-    ...(currentUser.role==="admin"?[{key:"admin",label:"Admin Panel",icon:"M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197"}]:[]),
-    ...(currentUser.role==="admin"?[{key:"audit-log",label:"Audit Log",icon:"M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",badge:auditLog.length>0?auditLog.length:undefined}]:[]),
+    ...((currentUser?.role==="manager"||currentUser?.role==="admin")?[{key:"approvals",label:"Approvals",icon:"M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",badge:totalPending}]:[]),
+    ...(currentUser?.role==="admin"?[{key:"admin",label:"Admin Panel",icon:"M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197"}]:[]),
+    ...(currentUser?.role==="admin"?[{key:"audit-log",label:"Audit Log",icon:"M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",badge:auditLog.length>0?auditLog.length:undefined}]:[]),
   ];
 
   // ── SIDEBAR ──
