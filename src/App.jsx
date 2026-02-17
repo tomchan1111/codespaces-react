@@ -21,11 +21,11 @@ function saveJSON(key, value) {
 }
 
 const INITIAL_USERS = [
-  { id: 1, name: "Alice Tan", role: "staff", avatar: "AT", department: "Marketing" },
-  { id: 2, name: "Bob Lee", role: "staff", avatar: "BL", department: "Engineering" },
-  { id: 3, name: "Carol Ng", role: "manager", avatar: "CN", department: "Engineering" },
-  { id: 4, name: "David Koh", role: "staff", avatar: "DK", department: "Marketing" },
-  { id: 5, name: "Eve Lim", role: "admin", avatar: "EL", department: "HR" },
+  { id: 1, name: "Alice Tan", role: "staff", avatar: "AT", grade: "Operator" },
+  { id: 2, name: "Bob Lee", role: "staff", avatar: "BL", grade: "Intermediate" },
+  { id: 3, name: "Carol Ng", role: "manager", avatar: "CN", grade: "Operator" },
+  { id: 4, name: "David Koh", role: "staff", avatar: "DK", grade: "Trainee" },
+  { id: 5, name: "Eve Lim", role: "admin", avatar: "EL", grade: "Operator" },
 ];
 
 const LEAVE_TYPES = ["Annual / Paid Leave", "Conference Leave"];
@@ -42,7 +42,7 @@ const DUTY_STATUS_COLORS = {
 const USER_COLORS = ["bg-blue-500","bg-purple-500","bg-pink-500","bg-indigo-500","bg-teal-500","bg-orange-500","bg-rose-500","bg-cyan-500","bg-lime-600","bg-amber-600"];
 const LEAVE_TYPE_COLORS = { "Annual / Paid Leave": "bg-blue-100 text-blue-800", "Conference Leave": "bg-purple-100 text-purple-800" };
 const ROLES = ["staff","manager","admin"];
-const DEPARTMENTS = ["Marketing","Engineering","HR","Finance","Operations","Sales"];
+const GRADES = ["Operator","Intermediate","Trainee"];
 const today = new Date();
 
 const initialLeaves = [
@@ -152,7 +152,7 @@ export default function App() {
 
   // add/edit user
   const [showAdd, setShowAdd]   = useState(false);
-  const [newUser, setNewUser]   = useState({name:"",role:"staff",department:"Marketing"});
+  const [newUser, setNewUser]   = useState({name:"",role:"staff",grade:"Operator"});
   const [newErr, setNewErr]     = useState("");
   const [editUser, setEditUser] = useState(null);
   const [editName, setEditName] = useState("");
@@ -217,20 +217,20 @@ export default function App() {
     const n=newUser.name.trim();
     if(!n||n.length<2) return setNewErr("Name must be at least 2 characters.");
     const maxId=Math.max(...users.map(u=>u.id));
-    const u={id:maxId+1,name:n,role:newUser.role,department:newUser.department,avatar:getInitials(n)};
-    setUsers(p=>[...p,u]); setShowAdd(false); setNewUser({name:"",role:"staff",department:"Marketing"});
-    addLog("User added", `Added new user: ${u.name} (${u.role}, ${u.department})`);
+    const u={id:maxId+1,name:n,role:newUser.role,grade:newUser.grade,avatar:getInitials(n)};
+    setUsers(p=>[...p,u]); setShowAdd(false); setNewUser({name:"",role:"staff",grade:"Operator"});
+    addLog("User added", `Added new user: ${u.name} (${u.role}, ${u.grade})`);
     notify(`${u.name} added!`);
   }
-  function openEdit(u) { setEditUser(u); setEditName(u.name); setEditRole(u.role); setEditDept(u.department); setEditErr(""); }
+  function openEdit(u) { setEditUser(u); setEditName(u.name); setEditRole(u.role); setEditDept(u.grade); setEditErr(""); }
   function saveEdit() {
     setEditErr("");
     const n=editName.trim();
     if(!n||n.length<2) return setEditErr("Name must be at least 2 characters.");
-    const updated={...editUser,name:n,role:editRole,department:editDept,avatar:getInitials(n)};
+    const updated={...editUser,name:n,role:editRole,grade:editDept,avatar:getInitials(n)};
     setUsers(p=>p.map(u=>u.id===editUser.id?updated:u));
     if(currentUser.id===editUser.id) setCurrentUser(updated);
-    addLog("User edited", `Edited ${editUser.name}: name=${n}, role=${editRole}, dept=${editDept}`);
+    addLog("User edited", `Edited ${editUser.name}: name=${n}, role=${editRole}, grade=${editDept}`);
     setEditUser(null); notify("User updated!");
   }
   function removeUser(uid) {
@@ -541,7 +541,7 @@ export default function App() {
                       <div className="flex items-start gap-3">
                         <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${colorFor(l.userId)}`}>{u?.avatar}</div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1"><span className="font-semibold text-gray-800 text-sm">{u?.name}</span><span className="text-gray-400 text-xs">{u?.department}</span></div>
+                          <div className="flex items-center gap-2 mb-1"><span className="font-semibold text-gray-800 text-sm">{u?.name}</span><span className="text-gray-400 text-xs">{u?.grade}</span></div>
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type]}`}>{l.type}</span>
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>{l.status}</span>
@@ -576,7 +576,7 @@ export default function App() {
                       <div className="flex items-start gap-3">
                         <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${colorFor(d.userId)}`}>{u?.avatar}</div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1"><span className="font-semibold text-gray-800 text-sm">{u?.name}</span><span className="text-gray-400 text-xs">{u?.department}</span></div>
+                          <div className="flex items-center gap-2 mb-1"><span className="font-semibold text-gray-800 text-sm">{u?.name}</span><span className="text-gray-400 text-xs">{u?.grade}</span></div>
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Duty</span>
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>{d.status}</span>
@@ -609,7 +609,7 @@ export default function App() {
 
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-gray-700">Users & Leave Management</h3>
-                <button onClick={()=>{setShowAdd(true);setNewUser({name:"",role:"staff",department:"Marketing"});setNewErr("");}}
+                <button onClick={()=>{setShowAdd(true);setNewUser({name:"",role:"staff",grade:"Operator"});setNewErr("");}}
                   className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-xl text-xs font-semibold shadow transition-all">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
                   Add User
@@ -633,7 +633,7 @@ export default function App() {
                           <span className="font-semibold text-gray-800 text-sm truncate">{u.name}</span>
                           {passwords[u.id]&&<svg className="w-3 h-3 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>}
                         </div>
-                        <div className="text-xs text-gray-400">{u.department} · <span className="capitalize">{u.role}</span></div>
+                        <div className="text-xs text-gray-400">{u.grade} · <span className="capitalize">{u.role}</span></div>
                       </div>
                       <div className="flex gap-2 text-xs flex-shrink-0 mr-1">
                         <div className="text-center"><div className="font-bold text-green-500">{ul.filter(l=>l.status==="Approved").length}</div><div className="text-gray-400">OK</div></div>
@@ -774,7 +774,7 @@ export default function App() {
             <div className="text-center mb-5">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold mx-auto mb-3 ${colorFor(switchTarget.id)}`}>{switchTarget.avatar}</div>
               <h3 className="font-bold text-gray-800 text-lg">{switchTarget.name}</h3>
-              <p className="text-sm text-gray-400 capitalize">{switchTarget.role} · {switchTarget.department}</p>
+              <p className="text-sm text-gray-400 capitalize">{switchTarget.role} · {switchTarget.grade}</p>
             </div>
             <FInput label="Password" type="password" value={switchPw} onChange={v=>{setSwitchPw(v);setSwitchErr("");}} placeholder="Enter password..." autoFocus={true}/>
             {switchErr&&<p className="text-red-500 text-xs mt-2 bg-red-50 rounded-lg px-3 py-2">{switchErr}</p>}
@@ -792,7 +792,7 @@ export default function App() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e=>e.stopPropagation()}>
             <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 px-6 py-5 text-white text-center">
               <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-xl font-bold mx-auto mb-2 border-2 border-white/30 ${colorFor(currentUser.id)}`}>{currentUser.avatar}</div>
-              <p className="text-sm opacity-75 capitalize">{currentUser.role} · {currentUser.department}</p>
+              <p className="text-sm opacity-75 capitalize">{currentUser.role} · {currentUser.grade}</p>
               <h3 className="font-bold text-lg">My Profile</h3>
             </div>
             <div className="p-5 space-y-4 max-h-80 overflow-y-auto">
@@ -834,7 +834,7 @@ export default function App() {
             <div className="space-y-3">
               <FInput label="Full Name" value={newUser.name} onChange={v=>setNewUser(p=>({...p,name:v}))} placeholder="e.g. John Smith"/>
               <FSelect label="Role" value={newUser.role} onChange={v=>setNewUser(p=>({...p,role:v}))} options={ROLES}/>
-              <FSelect label="Department" value={newUser.department} onChange={v=>setNewUser(p=>({...p,department:v}))} options={DEPARTMENTS}/>
+              <FSelect label="Grade" value={newUser.grade} onChange={v=>setNewUser(p=>({...p,grade:v}))} options={GRADES}/>
               {newErr&&<p className="text-red-500 text-sm bg-red-50 rounded-xl px-3 py-2">{newErr}</p>}
             </div>
             <div className="flex gap-3 mt-5">
@@ -854,7 +854,7 @@ export default function App() {
             <div className="space-y-3">
               <FInput label="Full Name" value={editName} onChange={setEditName} placeholder="Full name"/>
               <FSelect label="Role" value={editRole} onChange={setEditRole} options={ROLES}/>
-              <FSelect label="Department" value={editDept} onChange={setEditDept} options={DEPARTMENTS}/>
+              <FSelect label="Grade" value={editDept} onChange={setEditDept} options={GRADES}/>
               {editErr&&<p className="text-red-500 text-sm bg-red-50 rounded-xl px-3 py-2">{editErr}</p>}
             </div>
             <div className="flex gap-3 mt-5">
