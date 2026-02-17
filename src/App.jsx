@@ -172,15 +172,18 @@ export default function App() {
   const [expandedUserId, setExpandedUserId] = useState(null);
   const [adminLeaveFilter, setAdminLeaveFilter] = useState("All");
 
-  // ── Cloud sync refs ──
-  const saveTimerRef = useRef(null);
-  const skipSaveRef = useRef(true);      // skip save on initial mount
-  const lastSaveRef = useRef(0);         // timestamp of last cloud save
+  // ── Cloud sync state ──
+  const cloudSnapshotRef = useRef(null); // snapshot of data as loaded from cloud
+  const [dirty, setDirty]       = useState(false);
+  const [saving, setSaving]     = useState(false);
+  const [conflictMsg, setConflictMsg] = useState(null);
+
+  // helper: build the shared-data object
+  const buildData = useCallback(() => ({ users, passwords, leaves, duties, auditLog }), [users, passwords, leaves, duties, auditLog]);
 
   // ── Load from cloud on mount ──
   useEffect(() => {
     loadCloud().then(data => {
-      // Use cloud data if available, otherwise fall back to hardcoded defaults (first-ever load)
       const cloudUsers    = data?.users?.length ? data.users : INITIAL_USERS;
       const cloudPasswords = data?.passwords ?? {};
       const cloudLeaves   = data?.leaves ?? initialLeaves;
@@ -193,57 +196,79 @@ export default function App() {
       setDuties(cloudDuties);
       setAuditLog(cloudAuditLog);
 
-      // Restore currentUser from cloud user list + local device preference
+      // Store snapshot for conflict detection
+      cloudSnapshotRef.current = JSON.stringify({ users: cloudUsers, passwords: cloudPasswords, leaves: cloudLeaves, duties: cloudDuties, auditLog: cloudAuditLog });
+
       const savedId = loadLocal('leavesync_currentUserId', null);
       const found = savedId && cloudUsers.find(u => u.id === savedId);
       setCurrentUser(found || cloudUsers[0]);
 
       setCloudLoading(false);
-      // Allow saves after initial load settles
-      setTimeout(() => { skipSaveRef.current = false; }, 500);
     });
   }, []);
 
   // ── Persist currentUserId locally (device-specific) ──
   useEffect(() => { if (currentUser) saveLocal('leavesync_currentUserId', currentUser.id); }, [currentUser]);
 
-  // ── Debounced save to cloud on every shared-state change ──
-  useEffect(() => {
-    if (cloudLoading || skipSaveRef.current) return;
-    // Don't save if state is still empty (pre-cloud-load)
-    if (!users.length || !currentUser) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      lastSaveRef.current = Date.now();
-      saveCloudData({ users, passwords, leaves, duties, auditLog });
-    }, 500);
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [users, passwords, leaves, duties, auditLog, cloudLoading, currentUser]);
-
-  // ── Poll for updates from other users every 5 seconds ──
+  // ── Mark dirty when shared state changes (skip during initial load) ──
+  const initialLoadDone = useRef(false);
   useEffect(() => {
     if (cloudLoading) return;
-    const interval = setInterval(async () => {
-      // Don't poll if we just saved (avoid echo)
-      if (Date.now() - lastSaveRef.current < 3000) return;
-      const data = await loadCloud();
-      if (!data) return;
-      // Only update state if data actually changed (prevents save loop)
-      skipSaveRef.current = true;
-      setUsers(prev =>  JSON.stringify(prev) !== JSON.stringify(data.users || prev) ? (data.users || prev) : prev);
-      setPasswords(prev => JSON.stringify(prev) !== JSON.stringify(data.passwords ?? prev) ? (data.passwords ?? prev) : prev);
-      setLeaves(prev => JSON.stringify(prev) !== JSON.stringify(data.leaves || prev) ? (data.leaves || prev) : prev);
-      setDuties(prev => JSON.stringify(prev) !== JSON.stringify(data.duties || prev) ? (data.duties || prev) : prev);
-      setAuditLog(prev => JSON.stringify(prev) !== JSON.stringify(data.auditLog || prev) ? (data.auditLog || prev) : prev);
-      // Also update currentUser if their profile changed in cloud
-      setCurrentUser(prev => {
-        const updated = (data.users || []).find(u => u.id === prev.id);
-        return updated && JSON.stringify(updated) !== JSON.stringify(prev) ? updated : prev;
-      });
-      setTimeout(() => { skipSaveRef.current = false; }, 300);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [cloudLoading]);
+    if (!initialLoadDone.current) { initialLoadDone.current = true; return; }
+    setDirty(true);
+  }, [users, passwords, leaves, duties, auditLog, cloudLoading]);
+
+  // ── Manual save with conflict detection ──
+  async function saveToCloud() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      // Fetch current cloud data to check for conflicts
+      const remote = await loadCloud();
+      const remoteStr = remote ? JSON.stringify(remote) : null;
+      // If cloud has changed since we last loaded/saved, warn the user
+      if (remoteStr && cloudSnapshotRef.current && remoteStr !== cloudSnapshotRef.current) {
+        setConflictMsg("Another user has saved changes since you last loaded. Please refresh to get the latest data before saving.");
+        setSaving(false);
+        return;
+      }
+      const data = { users, passwords, leaves, duties, auditLog };
+      await saveCloudData(data);
+      cloudSnapshotRef.current = JSON.stringify(data);
+      setDirty(false);
+      notify("Saved to cloud ✓", "green");
+    } catch {
+      notify("Save failed!", "red");
+    }
+    setSaving(false);
+  }
+
+  // ── Refresh from cloud (discard local changes) ──
+  async function refreshFromCloud() {
+    setCloudLoading(true);
+    setConflictMsg(null);
+    const data = await loadCloud();
+    const cloudUsers    = data?.users?.length ? data.users : INITIAL_USERS;
+    const cloudPasswords = data?.passwords ?? {};
+    const cloudLeaves   = data?.leaves ?? initialLeaves;
+    const cloudDuties   = data?.duties ?? initialDuties;
+    const cloudAuditLog = data?.auditLog ?? [];
+
+    setUsers(cloudUsers);
+    setPasswords(cloudPasswords);
+    setLeaves(cloudLeaves);
+    setDuties(cloudDuties);
+    setAuditLog(cloudAuditLog);
+    cloudSnapshotRef.current = JSON.stringify({ users: cloudUsers, passwords: cloudPasswords, leaves: cloudLeaves, duties: cloudDuties, auditLog: cloudAuditLog });
+
+    const savedId = loadLocal('leavesync_currentUserId', null);
+    const found = savedId && cloudUsers.find(u => u.id === savedId);
+    setCurrentUser(found || cloudUsers[0]);
+    setDirty(false);
+    setCloudLoading(false);
+    initialLoadDone.current = false; // reset so next state change marks dirty
+    notify("Refreshed from cloud ✓", "green");
+  }
 
   const addLog = useCallback((action, details) => {
     setAuditLog(prev => [{ id: Date.now(), userId: currentUser.id, userName: currentUser.name, action, details, timestamp: new Date().toISOString() }, ...prev].slice(0, 500));
@@ -450,6 +475,42 @@ export default function App() {
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden" style={{fontFamily:"system-ui,sans-serif"}}>
       {notif&&<div className={`fixed top-3 right-3 z-50 px-4 py-2.5 rounded-xl shadow-lg text-white text-sm font-medium ${notif.color==="green"?"bg-green-500":"bg-red-500"}`}>{notif.msg}</div>}
+
+      {/* ═══ Conflict modal ═══ */}
+      {conflictMsg&&(
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4" onClick={()=>setConflictMsg(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm" onClick={e=>e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 bg-yellow-100">
+              <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+            </div>
+            <h3 className="font-bold text-gray-800 text-base text-center mb-1">Conflict Detected</h3>
+            <p className="text-sm text-gray-500 text-center mb-5">{conflictMsg}</p>
+            <div className="flex gap-3">
+              <button onClick={()=>setConflictMsg(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 py-2.5 rounded-xl font-semibold text-sm">Cancel</button>
+              <button onClick={refreshFromCloud} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-semibold text-sm">Refresh Now</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Floating Save / Refresh buttons ═══ */}
+      <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2">
+        <button onClick={refreshFromCloud}
+          className="flex items-center gap-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 px-3 py-2.5 rounded-xl text-sm font-semibold shadow-lg transition-all"
+          title="Refresh from cloud">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span className="hidden sm:inline">Refresh</span>
+        </button>
+        {dirty&&(
+          <button onClick={saveToCloud} disabled={saving}
+            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-lg transition-all ${saving?"bg-gray-400 cursor-wait":"bg-indigo-600 hover:bg-indigo-700 animate-pulse"} text-white`}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+            {saving?"Saving…":"Save to Cloud"}
+          </button>
+        )}
+      </div>
 
       <div className="hidden md:flex flex-shrink-0"><Sidebar/></div>
       {sidebarOpen&&(
