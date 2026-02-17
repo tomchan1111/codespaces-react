@@ -1,4 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+
+// ── localStorage helpers ──
+const STORAGE_KEYS = {
+  users: "leavesync_users",
+  passwords: "leavesync_passwords",
+  leaves: "leavesync_leaves",
+  duties: "leavesync_duties",
+  currentUserId: "leavesync_currentUserId",
+  auditLog: "leavesync_auditLog",
+};
+
+function loadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+}
+function saveJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
 
 const INITIAL_USERS = [
   { id: 1, name: "Alice Tan", role: "staff", avatar: "AT", department: "Marketing" },
@@ -87,11 +107,16 @@ const ConfirmModal = ({title,message,onConfirm,onCancel,danger=true}) => (
 );
 
 export default function App() {
-  const [users, setUsers]       = useState(INITIAL_USERS);
-  const [passwords, setPasswords] = useState({});
-  const [currentUser, setCurrentUser] = useState(INITIAL_USERS[0]);
-  const [leaves, setLeaves]     = useState(initialLeaves);
-  const [duties, setDuties]     = useState(initialDuties);
+  const [users, setUsers]       = useState(() => loadJSON(STORAGE_KEYS.users, INITIAL_USERS));
+  const [passwords, setPasswords] = useState(() => loadJSON(STORAGE_KEYS.passwords, {}));
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedId = loadJSON(STORAGE_KEYS.currentUserId, null);
+    const savedUsers = loadJSON(STORAGE_KEYS.users, INITIAL_USERS);
+    return (savedId && savedUsers.find(u => u.id === savedId)) || savedUsers[0] || INITIAL_USERS[0];
+  });
+  const [leaves, setLeaves]     = useState(() => loadJSON(STORAGE_KEYS.leaves, initialLeaves));
+  const [duties, setDuties]     = useState(() => loadJSON(STORAGE_KEYS.duties, initialDuties));
+  const [auditLog, setAuditLog] = useState(() => loadJSON(STORAGE_KEYS.auditLog, []));
   const [view, setView]         = useState("calendar");
   const [calYear, setCalYear]   = useState(today.getFullYear());
   const [calMonth, setCalMonth] = useState(today.getMonth());
@@ -139,6 +164,18 @@ export default function App() {
   const [expandedUserId, setExpandedUserId] = useState(null);
   const [adminLeaveFilter, setAdminLeaveFilter] = useState("All");
 
+  // ── Persist to localStorage on every change ──
+  useEffect(() => { saveJSON(STORAGE_KEYS.users, users); }, [users]);
+  useEffect(() => { saveJSON(STORAGE_KEYS.passwords, passwords); }, [passwords]);
+  useEffect(() => { saveJSON(STORAGE_KEYS.currentUserId, currentUser.id); }, [currentUser]);
+  useEffect(() => { saveJSON(STORAGE_KEYS.leaves, leaves); }, [leaves]);
+  useEffect(() => { saveJSON(STORAGE_KEYS.duties, duties); }, [duties]);
+  useEffect(() => { saveJSON(STORAGE_KEYS.auditLog, auditLog); }, [auditLog]);
+
+  const addLog = useCallback((action, details) => {
+    setAuditLog(prev => [{ id: Date.now(), userId: currentUser.id, userName: currentUser.name, action, details, timestamp: new Date().toISOString() }, ...prev].slice(0, 500));
+  }, [currentUser]);
+
   const notify = (msg,color="green") => { setNotif({msg,color}); setTimeout(()=>setNotif(null),3000); };
 
   // ── Switch user ──
@@ -147,7 +184,7 @@ export default function App() {
     if(passwords[u.id]) { setSwitchTarget(u); setSwitchPw(""); setSwitchErr(""); }
     else doSwitch(u);
   }
-  function doSwitch(u) { setCurrentUser(u); setView("calendar"); setFilter("All"); setDutyFilter("All"); setSidebarOpen(false); setSwitchTarget(null); }
+  function doSwitch(u) { addLog("Switched user", `Switched to ${u.name}`); setCurrentUser(u); setView("calendar"); setFilter("All"); setDutyFilter("All"); setSidebarOpen(false); setSwitchTarget(null); }
   function confirmSwitch() {
     if(switchPw===passwords[switchTarget.id]) doSwitch(switchTarget);
     else setSwitchErr("Incorrect password. Please try again.");
@@ -165,8 +202,10 @@ export default function App() {
       if(profPwNew.length<4) return setProfErr("New password must be at least 4 characters.");
       if(profPwNew!==profPwCon) return setProfErr("Passwords do not match.");
       setPasswords(p=>({...p,[currentUser.id]:profPwNew}));
+      addLog("Password changed", `${currentUser.name} changed their password`);
     }
     const updated={...currentUser,name:n,avatar:getInitials(n)};
+    if(n !== currentUser.name) addLog("Name changed", `Changed name from "${currentUser.name}" to "${n}"`);
     setUsers(p=>p.map(u=>u.id===currentUser.id?updated:u));
     setCurrentUser(updated);
     setProfOk("Profile saved!"); setProfPwCur(""); setProfPwNew(""); setProfPwCon("");
@@ -179,7 +218,9 @@ export default function App() {
     if(!n||n.length<2) return setNewErr("Name must be at least 2 characters.");
     const maxId=Math.max(...users.map(u=>u.id));
     const u={id:maxId+1,name:n,role:newUser.role,department:newUser.department,avatar:getInitials(n)};
-    setUsers(p=>[...p,u]); setShowAdd(false); setNewUser({name:"",role:"staff",department:"Marketing"}); notify(`${u.name} added!`);
+    setUsers(p=>[...p,u]); setShowAdd(false); setNewUser({name:"",role:"staff",department:"Marketing"});
+    addLog("User added", `Added new user: ${u.name} (${u.role}, ${u.department})`);
+    notify(`${u.name} added!`);
   }
   function openEdit(u) { setEditUser(u); setEditName(u.name); setEditRole(u.role); setEditDept(u.department); setEditErr(""); }
   function saveEdit() {
@@ -189,13 +230,16 @@ export default function App() {
     const updated={...editUser,name:n,role:editRole,department:editDept,avatar:getInitials(n)};
     setUsers(p=>p.map(u=>u.id===editUser.id?updated:u));
     if(currentUser.id===editUser.id) setCurrentUser(updated);
+    addLog("User edited", `Edited ${editUser.name}: name=${n}, role=${editRole}, dept=${editDept}`);
     setEditUser(null); notify("User updated!");
   }
   function removeUser(uid) {
     if(uid===currentUser.id) return notify("Cannot delete yourself!","red");
+    const removedName = users.find(u=>u.id===uid)?.name || "Unknown";
     setUsers(p=>p.filter(u=>u.id!==uid));
     setLeaves(p=>p.filter(l=>l.userId!==uid));
     setDuties(p=>p.filter(d=>d.userId!==uid));
+    addLog("User removed", `Removed user: ${removedName}`);
     notify("User removed.");
   }
 
@@ -206,10 +250,23 @@ export default function App() {
     if(form.end<form.start) return setFormErr("End date must be after start date.");
     if(!form.reason.trim()) return setFormErr("Please provide a reason.");
     setLeaves(p=>[...p,{id:Date.now(),userId:currentUser.id,type:form.type,start:form.start,end:form.end,status:"Pending",reason:form.reason,submittedAt:new Date().toISOString().split("T")[0]}]);
+    addLog("Leave requested", `${form.type}: ${form.start} to ${form.end} — ${form.reason}`);
     setShowRequest(false); setForm({type:LEAVE_TYPES[0],start:"",end:"",reason:""}); notify("Leave request submitted!");
   }
-  function actLeave(id,status) { setLeaves(p=>p.map(l=>l.id===id?{...l,status}:l)); notify(status==="Approved"?"Approved ✓":"Rejected",status==="Approved"?"green":"red"); }
-  function deleteLeave(id) { setLeaves(p=>p.filter(l=>l.id!==id)); setConfirmDel(null); notify("Leave removed."); }
+  function actLeave(id,status) {
+    const leave = leaves.find(l=>l.id===id);
+    const owner = leave ? getU(leave.userId) : null;
+    setLeaves(p=>p.map(l=>l.id===id?{...l,status}:l));
+    addLog(`Leave ${status.toLowerCase()}`, `${status} ${owner?.name || "user"}'s ${leave?.type || "leave"}: ${leave?.start} to ${leave?.end}`);
+    notify(status==="Approved"?"Approved ✓":"Rejected",status==="Approved"?"green":"red");
+  }
+  function deleteLeave(id) {
+    const leave = leaves.find(l=>l.id===id);
+    const owner = leave ? getU(leave.userId) : null;
+    setLeaves(p=>p.filter(l=>l.id!==id)); setConfirmDel(null);
+    addLog("Leave deleted", `Deleted ${owner?.name || "user"}'s ${leave?.type || "leave"}: ${leave?.start} to ${leave?.end}`);
+    notify("Leave removed.");
+  }
 
   // ── Duty CRUD ──
   function submitDuty() {
@@ -217,10 +274,23 @@ export default function App() {
     if(!dutyForm.date) return setDutyErr("Please select a date.");
     if(!dutyForm.reason.trim()) return setDutyErr("Please provide a reason.");
     setDuties(p=>[...p,{id:Date.now(),userId:currentUser.id,date:dutyForm.date,reason:dutyForm.reason,status:"Pending",submittedAt:new Date().toISOString().split("T")[0]}]);
+    addLog("Duty requested", `Duty on ${dutyForm.date} — ${dutyForm.reason}`);
     setShowDuty(false); setDutyForm({date:"",reason:""}); notify("Duty request submitted!");
   }
-  function actDuty(id,status) { setDuties(p=>p.map(d=>d.id===id?{...d,status}:d)); notify(status==="Approved"?"Duty approved ✓":"Duty rejected",status==="Approved"?"green":"red"); }
-  function deleteDuty(id) { setDuties(p=>p.filter(d=>d.id!==id)); setConfirmDel(null); notify("Duty removed."); }
+  function actDuty(id,status) {
+    const duty = duties.find(d=>d.id===id);
+    const owner = duty ? getU(duty.userId) : null;
+    setDuties(p=>p.map(d=>d.id===id?{...d,status}:d));
+    addLog(`Duty ${status.toLowerCase()}`, `${status} ${owner?.name || "user"}'s duty on ${duty?.date}`);
+    notify(status==="Approved"?"Duty approved ✓":"Duty rejected",status==="Approved"?"green":"red");
+  }
+  function deleteDuty(id) {
+    const duty = duties.find(d=>d.id===id);
+    const owner = duty ? getU(duty.userId) : null;
+    setDuties(p=>p.filter(d=>d.id!==id)); setConfirmDel(null);
+    addLog("Duty deleted", `Deleted ${owner?.name || "user"}'s duty on ${duty?.date}`);
+    notify("Duty removed.");
+  }
 
   // ── Calendar helpers ──
   const myLeaves = leaves.filter(l=>l.userId===currentUser.id);
@@ -249,6 +319,7 @@ export default function App() {
     {key:"my-leaves", label:"My Requests",   icon:"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"},
     ...((currentUser.role==="manager"||currentUser.role==="admin")?[{key:"approvals",label:"Approvals",icon:"M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",badge:totalPending}]:[]),
     ...(currentUser.role==="admin"?[{key:"admin",label:"Admin Panel",icon:"M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197"}]:[]),
+    ...(currentUser.role==="admin"?[{key:"audit-log",label:"Audit Log",icon:"M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",badge:auditLog.length>0?auditLog.length:undefined}]:[]),
   ];
 
   // ── SIDEBAR ──
@@ -314,8 +385,8 @@ export default function App() {
               <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/></svg>
             </button>
             <div>
-              <h1 className="text-base font-bold text-gray-800">{{calendar:"Team Calendar","my-leaves":"My Requests",approvals:"Approvals",admin:"Admin Panel"}[view]}</h1>
-              <p className="text-xs text-gray-400 hidden sm:block">{{calendar:"Approved leaves shown","my-leaves":"Your leave & duty requests",approvals:"Review pending requests",admin:"Manage users & settings"}[view]}</p>
+              <h1 className="text-base font-bold text-gray-800">{{calendar:"Team Calendar","my-leaves":"My Requests",approvals:"Approvals",admin:"Admin Panel","audit-log":"Audit Log"}[view]}</h1>
+              <p className="text-xs text-gray-400 hidden sm:block">{{calendar:"Approved leaves shown","my-leaves":"Your leave & duty requests",approvals:"Review pending requests",admin:"Manage users & settings","audit-log":"History of all changes"}[view]}</p>
             </div>
           </div>
 
@@ -645,7 +716,41 @@ export default function App() {
               })}
             </div>
           )}
-        </div>
+          {/* ══ AUDIT LOG ══ */}
+          {view==="audit-log"&&currentUser.role==="admin"&&(
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-500">{auditLog.length} record{auditLog.length!==1?"s":""}</p>
+                <div className="flex gap-2">
+                  {auditLog.length>0&&<button onClick={()=>setConfirmDel({type:"audit",id:"all",msg:"Clear all audit log entries? This cannot be undone."})} className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-xl text-xs font-semibold transition-all">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    Clear Log
+                  </button>}
+                  <button onClick={()=>{Object.values(STORAGE_KEYS).forEach(k=>localStorage.removeItem(k));window.location.reload();}} className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-xl text-xs font-semibold transition-all">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Reset All Data
+                  </button>
+                </div>
+              </div>
+              {auditLog.length===0&&<div className="text-center py-10 text-gray-400"><div className="text-3xl mb-2">📝</div><p className="text-sm">No activity recorded yet</p></div>}
+              {auditLog.map(log=>{
+                const logUser = users.find(u=>u.id===log.userId);
+                return(
+                  <div key={log.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-start gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${colorFor(log.userId)}`}>{logUser?.avatar || log.userName?.slice(0,2) || "??"}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                        <span className="font-semibold text-gray-800 text-sm">{log.userName || logUser?.name || "Unknown"}</span>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{log.action}</span>
+                      </div>
+                      <p className="text-sm text-gray-600">{log.details}</p>
+                      <p className="text-xs text-gray-400 mt-1">{new Date(log.timestamp).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}        </div>
       </div>
 
       {/* ════════════ CONFIRM DELETE ════════════ */}
@@ -653,7 +758,11 @@ export default function App() {
         <ConfirmModal
           title="Delete Record"
           message={confirmDel.msg}
-          onConfirm={()=>confirmDel.type==="leave"?deleteLeave(confirmDel.id):deleteDuty(confirmDel.id)}
+          onConfirm={()=>{
+            if(confirmDel.type==="leave") deleteLeave(confirmDel.id);
+            else if(confirmDel.type==="duty") deleteDuty(confirmDel.id);
+            else if(confirmDel.type==="audit") { setAuditLog([]); setConfirmDel(null); notify("Audit log cleared."); }
+          }}
           onCancel={()=>setConfirmDel(null)}
         />
       )}
