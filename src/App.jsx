@@ -1,23 +1,34 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
-// ── localStorage helpers ──
-const STORAGE_KEYS = {
-  users: "leavesync_users",
-  passwords: "leavesync_passwords",
-  leaves: "leavesync_leaves",
-  duties: "leavesync_duties",
-  currentUserId: "leavesync_currentUserId",
-  auditLog: "leavesync_auditLog",
-};
-
-function loadJSON(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch { return fallback; }
+// ── localStorage helper (device-local only) ──
+function loadLocal(key, fallback) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
 }
-function saveJSON(key, value) {
+function saveLocal(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+// ── Cloud storage helpers (Vercel Blob via API route) ──
+const CLOUD_API = '/api/data';
+
+async function loadCloud() {
+  try {
+    const res = await fetch(CLOUD_API);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+async function saveCloudData(data) {
+  try {
+    await fetch(CLOUD_API, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  } catch (e) {
+    console.error('Cloud save failed:', e);
+  }
 }
 
 const INITIAL_USERS = [
@@ -107,16 +118,16 @@ const ConfirmModal = ({title,message,onConfirm,onCancel,danger=true}) => (
 );
 
 export default function App() {
-  const [users, setUsers]       = useState(() => loadJSON(STORAGE_KEYS.users, INITIAL_USERS));
-  const [passwords, setPasswords] = useState(() => loadJSON(STORAGE_KEYS.passwords, {}));
+  const [users, setUsers]       = useState(INITIAL_USERS);
+  const [passwords, setPasswords] = useState({});
   const [currentUser, setCurrentUser] = useState(() => {
-    const savedId = loadJSON(STORAGE_KEYS.currentUserId, null);
-    const savedUsers = loadJSON(STORAGE_KEYS.users, INITIAL_USERS);
-    return (savedId && savedUsers.find(u => u.id === savedId)) || savedUsers[0] || INITIAL_USERS[0];
+    const savedId = loadLocal('leavesync_currentUserId', null);
+    return (savedId && INITIAL_USERS.find(u => u.id === savedId)) || INITIAL_USERS[0];
   });
-  const [leaves, setLeaves]     = useState(() => loadJSON(STORAGE_KEYS.leaves, initialLeaves));
-  const [duties, setDuties]     = useState(() => loadJSON(STORAGE_KEYS.duties, initialDuties));
-  const [auditLog, setAuditLog] = useState(() => loadJSON(STORAGE_KEYS.auditLog, []));
+  const [leaves, setLeaves]     = useState(initialLeaves);
+  const [duties, setDuties]     = useState(initialDuties);
+  const [auditLog, setAuditLog] = useState([]);
+  const [cloudLoading, setCloudLoading] = useState(true);
   const [view, setView]         = useState("calendar");
   const [calYear, setCalYear]   = useState(today.getFullYear());
   const [calMonth, setCalMonth] = useState(today.getMonth());
@@ -164,13 +175,71 @@ export default function App() {
   const [expandedUserId, setExpandedUserId] = useState(null);
   const [adminLeaveFilter, setAdminLeaveFilter] = useState("All");
 
-  // ── Persist to localStorage on every change ──
-  useEffect(() => { saveJSON(STORAGE_KEYS.users, users); }, [users]);
-  useEffect(() => { saveJSON(STORAGE_KEYS.passwords, passwords); }, [passwords]);
-  useEffect(() => { saveJSON(STORAGE_KEYS.currentUserId, currentUser.id); }, [currentUser]);
-  useEffect(() => { saveJSON(STORAGE_KEYS.leaves, leaves); }, [leaves]);
-  useEffect(() => { saveJSON(STORAGE_KEYS.duties, duties); }, [duties]);
-  useEffect(() => { saveJSON(STORAGE_KEYS.auditLog, auditLog); }, [auditLog]);
+  // ── Cloud sync refs ──
+  const saveTimerRef = useRef(null);
+  const skipSaveRef = useRef(true);      // skip save on initial mount
+  const lastSaveRef = useRef(0);         // timestamp of last cloud save
+
+  // ── Load from cloud on mount ──
+  useEffect(() => {
+    loadCloud().then(data => {
+      if (data) {
+        if (data.users?.length)   setUsers(data.users);
+        if (data.passwords)       setPasswords(data.passwords);
+        if (data.leaves)          setLeaves(data.leaves);
+        if (data.duties)          setDuties(data.duties);
+        if (data.auditLog)        setAuditLog(data.auditLog);
+        // Restore currentUser from cloud user list + local device preference
+        const savedId = loadLocal('leavesync_currentUserId', null);
+        if (savedId && data.users) {
+          const found = data.users.find(u => u.id === savedId);
+          if (found) setCurrentUser(found);
+        }
+      }
+      setCloudLoading(false);
+      // Allow saves after initial load settles
+      setTimeout(() => { skipSaveRef.current = false; }, 500);
+    });
+  }, []);
+
+  // ── Persist currentUserId locally (device-specific) ──
+  useEffect(() => { saveLocal('leavesync_currentUserId', currentUser.id); }, [currentUser]);
+
+  // ── Debounced save to cloud on every shared-state change ──
+  useEffect(() => {
+    if (cloudLoading || skipSaveRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      lastSaveRef.current = Date.now();
+      saveCloudData({ users, passwords, leaves, duties, auditLog });
+    }, 500);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [users, passwords, leaves, duties, auditLog, cloudLoading]);
+
+  // ── Poll for updates from other users every 5 seconds ──
+  useEffect(() => {
+    if (cloudLoading) return;
+    const interval = setInterval(async () => {
+      // Don't poll if we just saved (avoid echo)
+      if (Date.now() - lastSaveRef.current < 3000) return;
+      const data = await loadCloud();
+      if (!data) return;
+      // Only update state if data actually changed (prevents save loop)
+      skipSaveRef.current = true;
+      setUsers(prev =>  JSON.stringify(prev) !== JSON.stringify(data.users || prev) ? (data.users || prev) : prev);
+      setPasswords(prev => JSON.stringify(prev) !== JSON.stringify(data.passwords ?? prev) ? (data.passwords ?? prev) : prev);
+      setLeaves(prev => JSON.stringify(prev) !== JSON.stringify(data.leaves || prev) ? (data.leaves || prev) : prev);
+      setDuties(prev => JSON.stringify(prev) !== JSON.stringify(data.duties || prev) ? (data.duties || prev) : prev);
+      setAuditLog(prev => JSON.stringify(prev) !== JSON.stringify(data.auditLog || prev) ? (data.auditLog || prev) : prev);
+      // Also update currentUser if their profile changed in cloud
+      setCurrentUser(prev => {
+        const updated = (data.users || []).find(u => u.id === prev.id);
+        return updated && JSON.stringify(updated) !== JSON.stringify(prev) ? updated : prev;
+      });
+      setTimeout(() => { skipSaveRef.current = false; }, 300);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [cloudLoading]);
 
   const addLog = useCallback((action, details) => {
     setAuditLog(prev => [{ id: Date.now(), userId: currentUser.id, userName: currentUser.name, action, details, timestamp: new Date().toISOString() }, ...prev].slice(0, 500));
@@ -362,6 +431,17 @@ export default function App() {
       </div>
     </div>
   );
+
+  if (cloudLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50" style={{fontFamily:"system-ui,sans-serif"}}>
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"/>
+          <p className="text-gray-500 text-sm font-medium">Loading from cloud…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden" style={{fontFamily:"system-ui,sans-serif"}}>
