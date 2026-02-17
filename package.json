@@ -13,8 +13,7 @@
   },
   "overrides": {
     "@svgr/webpack": "^8.0.1",
-    "@adobe/css-tools": "^4.3.1",
-    "postcss": "^8.4.31"
+    "@adobe/css-tools": "^4.3.1"
   },
   "scripts": {
     "start": "BROWSER=none WDS_SOCKET_PORT=0 vite --port 3000",
@@ -42,7 +41,10 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.4.24",
     "jsdom": "^26.1.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.19",
     "vite": "^6.3.6",
     "vitest": "^3.0.7"
   }
