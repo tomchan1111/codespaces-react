@@ -151,6 +151,11 @@ export default function App() {
   const [switchPw, setSwitchPw]   = useState("");
   const [switchErr, setSwitchErr] = useState("");
 
+  // welcome screen
+  const [welcomePw, setWelcomePw]     = useState("");
+  const [welcomeErr, setWelcomeErr]   = useState("");
+  const [welcomeTarget, setWelcomeTarget] = useState(null);
+
   // profile
   const [showProfile, setShowProfile] = useState(false);
   const [profName, setProfName]   = useState("");
@@ -201,10 +206,7 @@ export default function App() {
       // Store snapshot for conflict detection
       cloudSnapshotRef.current = JSON.stringify({ users: cloudUsers, passwords: cloudPasswords, leaves: cloudLeaves, duties: cloudDuties, auditLog: cloudAuditLog });
 
-      const savedId = loadLocal('leavesync_currentUserId', null);
-      const found = savedId && cloudUsers.find(u => u.id === savedId);
-      setCurrentUser(found || cloudUsers[0]);
-
+      // Don't auto-select user; show welcome screen instead
       setCloudLoading(false);
     });
   }, []);
@@ -470,6 +472,67 @@ export default function App() {
         <div className="text-center">
           <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"/>
           <p className="text-gray-500 text-sm font-medium">Loading from cloud…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Welcome screen: choose who is accessing the system ──
+  if (!currentUser) {
+    function selectWelcomeUser(u) {
+      if (passwords[u.id]) { setWelcomeTarget(u); setWelcomePw(""); setWelcomeErr(""); }
+      else { setCurrentUser(u); setView("calendar"); }
+    }
+    function confirmWelcomePw() {
+      if (welcomePw === passwords[welcomeTarget.id]) { setCurrentUser(welcomeTarget); setView("calendar"); setWelcomeTarget(null); }
+      else setWelcomeErr("Incorrect password");
+    }
+    return (
+      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50" style={{fontFamily:"system-ui,sans-serif"}}>
+        <div className="w-full max-w-md px-6">
+          <div className="text-center mb-8">
+            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-800 mb-1">Welcome to LeaveSync</h1>
+            <p className="text-sm text-gray-500">Select your account to continue</p>
+          </div>
+          <div className="space-y-2">
+            {users.map(u => (
+              <button key={u.id} onClick={() => selectWelcomeUser(u)}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:border-indigo-300 hover:bg-indigo-50 transition-all text-left group">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${colorFor(u.id)}`}>{u.avatar}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-gray-800 group-hover:text-indigo-700">{u.name}</div>
+                  <div className="text-xs text-gray-400 capitalize">{u.role} · {u.grade}</div>
+                </div>
+                {passwords[u.id] && <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>}
+              </button>
+            ))}
+          </div>
+          {/* Password prompt for protected accounts */}
+          {welcomeTarget && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setWelcomeTarget(null)}>
+              <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+                <div className="text-center mb-4">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold mx-auto mb-2 ${colorFor(welcomeTarget.id)}`}>{welcomeTarget.avatar}</div>
+                  <h3 className="font-bold text-gray-800 text-sm">{welcomeTarget.name}</h3>
+                  <p className="text-xs text-gray-400">Enter password to continue</p>
+                </div>
+                <input type="password" value={welcomePw} onChange={e => setWelcomePw(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && confirmWelcomePw()}
+                  placeholder="Password" autoFocus
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 mb-2"/>
+                {welcomeErr && <p className="text-xs text-red-500 mb-2">{welcomeErr}</p>}
+                <div className="flex gap-2">
+                  <button onClick={() => setWelcomeTarget(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 py-2 rounded-xl font-semibold text-sm">Cancel</button>
+                  <button onClick={confirmWelcomePw} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl font-semibold text-sm">Sign In</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
