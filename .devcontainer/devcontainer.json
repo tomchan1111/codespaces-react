@@ -3,7 +3,7 @@
   "hostRequirements": {
     "cpus": 4
   },
-  "waitFor": "onCreateCommand",
+  "waitFor": "updateContentCommand",
   "updateContentCommand": "npm install",
   "postCreateCommand": "",
   "postAttachCommand": {
