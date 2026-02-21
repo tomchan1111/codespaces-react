@@ -42,33 +42,32 @@ const INITIAL_USERS = [
 ];
 
 const LEAVE_TYPES = ["Annual / Paid Leave", "Conference Leave"];
-const STATUS_COLORS = {
-  Pending:  { bg: "bg-yellow-100", text: "text-yellow-700", dot: "bg-yellow-400", border: "border-yellow-300" },
-  Approved: { bg: "bg-green-100",  text: "text-green-700",  dot: "bg-green-500",  border: "border-green-300"  },
-  Rejected: { bg: "bg-red-100",    text: "text-red-700",    dot: "bg-red-400",    border: "border-red-300"    },
-};
-const DUTY_STATUS_COLORS = {
-  Pending:  { bg: "bg-yellow-100", text: "text-yellow-700", dot: "bg-yellow-400", border: "border-yellow-300" },
-  Approved: { bg: "bg-emerald-100",text: "text-emerald-700",dot: "bg-emerald-500",border: "border-emerald-300"},
-  Rejected: { bg: "bg-red-100",    text: "text-red-700",    dot: "bg-red-400",    border: "border-red-300"    },
-};
 const USER_COLORS = ["bg-blue-500","bg-purple-500","bg-pink-500","bg-indigo-500","bg-teal-500","bg-orange-500","bg-rose-500","bg-cyan-500","bg-lime-600","bg-amber-600"];
 const LEAVE_TYPE_COLORS = { "Annual / Paid Leave": "bg-blue-100 text-blue-800", "Conference Leave": "bg-purple-100 text-purple-800" };
 const ROLES = ["staff","manager","admin"];
 const GRADES = ["Operator","Intermediate","Trainee"];
 const today = new Date();
 
+const HK_PUBLIC_HOLIDAYS = new Set([
+  // 2026
+  "2026-01-01", "2026-02-17", "2026-02-18", "2026-02-19", "2026-04-03", "2026-04-04", "2026-04-06", "2026-04-07", "2026-05-01", "2026-05-25", "2026-06-19", "2026-07-01", "2026-09-26", "2026-10-01", "2026-10-19", "2026-12-25", "2026-12-26",
+  // 2027
+  "2027-01-01", "2027-02-06", "2027-02-08", "2027-02-09", "2027-03-26", "2027-03-27", "2027-03-29", "2027-04-05", "2027-05-01", "2027-05-13", "2027-06-09", "2027-07-01", "2027-09-16", "2027-10-01", "2027-10-09", "2027-12-25", "2027-12-27",
+  // 2028
+  "2028-01-01", "2028-01-26", "2028-01-27", "2028-01-28", "2028-04-04", "2028-04-14", "2028-04-15", "2028-04-17", "2028-05-01", "2028-05-02", "2028-05-28", "2028-07-01", "2028-10-02", "2028-10-04", "2028-10-26", "2028-12-25", "2028-12-26"
+]);
+
 const initialLeaves = [
-  { id:1, userId:1, type:"Annual / Paid Leave", start:"2026-02-10", end:"2026-02-12", status:"Approved", reason:"Family vacation",      submittedAt:"2026-02-01" },
-  { id:2, userId:2, type:"Conference Leave",    start:"2026-02-18", end:"2026-02-20", status:"Approved", reason:"Tech Summit 2026",      submittedAt:"2026-02-05" },
-  { id:3, userId:4, type:"Annual / Paid Leave", start:"2026-02-24", end:"2026-02-25", status:"Pending",  reason:"Personal errands",      submittedAt:"2026-02-14" },
-  { id:4, userId:1, type:"Conference Leave",    start:"2026-03-05", end:"2026-03-07", status:"Pending",  reason:"Marketing conference",  submittedAt:"2026-02-13" },
-  { id:5, userId:2, type:"Annual / Paid Leave", start:"2026-03-10", end:"2026-03-11", status:"Rejected", reason:"Spring break",          submittedAt:"2026-02-10" },
+  { id:1, userId:1, type:"Annual / Paid Leave", start:"2026-02-10", end:"2026-02-12", reason:"Family vacation",      submittedAt:"2026-02-01" },
+  { id:2, userId:2, type:"Conference Leave",    start:"2026-02-18", end:"2026-02-20", reason:"Tech Summit 2026",      submittedAt:"2026-02-05" },
+  { id:3, userId:4, type:"Annual / Paid Leave", start:"2026-02-24", end:"2026-02-25", reason:"Personal errands",      submittedAt:"2026-02-14" },
+  { id:4, userId:1, type:"Conference Leave",    start:"2026-03-05", end:"2026-03-07", reason:"Marketing conference",  submittedAt:"2026-02-13" },
+  { id:5, userId:2, type:"Annual / Paid Leave", start:"2026-03-10", end:"2026-03-11", reason:"Spring break",          submittedAt:"2026-02-10" },
 ];
 
 const initialDuties = [
-  { id:1, userId:1, date:"2026-02-28", reason:"Cover evening shift for David", status:"Pending",  submittedAt:"2026-02-15" },
-  { id:2, userId:2, date:"2026-03-02", reason:"Weekend server maintenance",    status:"Approved", submittedAt:"2026-02-14" },
+  { id:1, userId:1, date:"2026-02-28", reason:"Cover evening shift for David", submittedAt:"2026-02-15" },
+  { id:2, userId:2, date:"2026-03-02", reason:"Weekend server maintenance",    submittedAt:"2026-02-14" },
 ];
 
 function getInitials(name) { return name.split(" ").map(p=>p[0]).join("").toUpperCase().slice(0,2); }
@@ -137,19 +136,13 @@ export default function App() {
   const [dutyForm, setDutyForm] = useState({date:"",reason:""});
   const [formErr, setFormErr]   = useState("");
   const [dutyErr, setDutyErr]   = useState("");
-  const [filter, setFilter]     = useState("All");
-  const [dutyFilter, setDutyFilter] = useState("All");
   const [notif, setNotif]       = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [leaveTab, setLeaveTab] = useState("leaves"); // "leaves" | "duties" in My Leaves
+  const [requestMonthFilter, setRequestMonthFilter] = useState("thisMonth"); // "thisMonth" | "nextMonth"
 
   // confirm delete
   const [confirmDel, setConfirmDel] = useState(null); // {type:"leave"|"duty", id, msg}
-
-  // switch user
-  const [switchTarget, setSwitchTarget] = useState(null);
-  const [switchPw, setSwitchPw]   = useState("");
-  const [switchErr, setSwitchErr] = useState("");
 
   // welcome screen
   const [welcomePw, setWelcomePw]     = useState("");
@@ -177,7 +170,6 @@ export default function App() {
 
   // admin expanded user
   const [expandedUserId, setExpandedUserId] = useState(null);
-  const [adminLeaveFilter, setAdminLeaveFilter] = useState("All");
 
   // ── Cloud sync state ──
   const cloudSnapshotRef = useRef(null); // snapshot of data as loaded from cloud
@@ -281,18 +273,6 @@ export default function App() {
 
   const notify = (msg,color="green") => { setNotif({msg,color}); setTimeout(()=>setNotif(null),3000); };
 
-  // ── Switch user ──
-  function attemptSwitch(u) {
-    if(u.id===currentUser.id) return;
-    if(passwords[u.id]) { setSwitchTarget(u); setSwitchPw(""); setSwitchErr(""); }
-    else doSwitch(u);
-  }
-  function doSwitch(u) { addLog("Switched user", `Switched to ${u.name}`); setCurrentUser(u); setView("calendar"); setFilter("All"); setDutyFilter("All"); setSidebarOpen(false); setSwitchTarget(null); }
-  function confirmSwitch() {
-    if(switchPw===passwords[switchTarget.id]) doSwitch(switchTarget);
-    else setSwitchErr("Incorrect password. Please try again.");
-  }
-
   // ── Profile ──
   function openProfile() { setProfName(currentUser.name); setProfErr(""); setProfOk(""); setProfPwCur(""); setProfPwNew(""); setProfPwCon(""); setShowProfile(true); }
   function saveProfile() {
@@ -352,16 +332,9 @@ export default function App() {
     if(!form.start||!form.end) return setFormErr("Please select start and end dates.");
     if(form.end<form.start) return setFormErr("End date must be after start date.");
     if(!form.reason.trim()) return setFormErr("Please provide a reason.");
-    setLeaves(p=>[...p,{id:Date.now(),userId:currentUser.id,type:form.type,start:form.start,end:form.end,status:"Pending",reason:form.reason,submittedAt:new Date().toISOString().split("T")[0]}]);
+    setLeaves(p=>[...p,{id:Date.now(),userId:currentUser.id,type:form.type,start:form.start,end:form.end,reason:form.reason,submittedAt:new Date().toISOString().split("T")[0]}]);
     addLog("Leave requested", `${form.type}: ${form.start} to ${form.end} — ${form.reason}`);
     setShowRequest(false); setForm({type:LEAVE_TYPES[0],start:"",end:"",reason:""}); notify("Leave request submitted!");
-  }
-  function actLeave(id,status) {
-    const leave = leaves.find(l=>l.id===id);
-    const owner = leave ? getU(leave.userId) : null;
-    setLeaves(p=>p.map(l=>l.id===id?{...l,status}:l));
-    addLog(`Leave ${status.toLowerCase()}`, `${status} ${owner?.name || "user"}'s ${leave?.type || "leave"}: ${leave?.start} to ${leave?.end}`);
-    notify(status==="Approved"?"Approved ✓":"Rejected",status==="Approved"?"green":"red");
   }
   function deleteLeave(id) {
     const leave = leaves.find(l=>l.id===id);
@@ -376,16 +349,9 @@ export default function App() {
     setDutyErr("");
     if(!dutyForm.date) return setDutyErr("Please select a date.");
     if(!dutyForm.reason.trim()) return setDutyErr("Please provide a reason.");
-    setDuties(p=>[...p,{id:Date.now(),userId:currentUser.id,date:dutyForm.date,reason:dutyForm.reason,status:"Pending",submittedAt:new Date().toISOString().split("T")[0]}]);
+    setDuties(p=>[...p,{id:Date.now(),userId:currentUser.id,date:dutyForm.date,reason:dutyForm.reason,submittedAt:new Date().toISOString().split("T")[0]}]);
     addLog("Duty requested", `Duty on ${dutyForm.date} — ${dutyForm.reason}`);
     setShowDuty(false); setDutyForm({date:"",reason:""}); notify("Duty request submitted!");
-  }
-  function actDuty(id,status) {
-    const duty = duties.find(d=>d.id===id);
-    const owner = duty ? getU(duty.userId) : null;
-    setDuties(p=>p.map(d=>d.id===id?{...d,status}:d));
-    addLog(`Duty ${status.toLowerCase()}`, `${status} ${owner?.name || "user"}'s duty on ${duty?.date}`);
-    notify(status==="Approved"?"Duty approved ✓":"Duty rejected",status==="Approved"?"green":"red");
   }
   function deleteDuty(id) {
     const duty = duties.find(d=>d.id===id);
@@ -398,29 +364,28 @@ export default function App() {
   // ── Calendar helpers ──
   const myLeaves = leaves.filter(l=>l.userId===currentUser?.id);
   const myDuties = duties.filter(d=>d.userId===currentUser?.id);
-  const pendingLeaves = leaves.filter(l=>l.status==="Pending");
-  const pendingDuties = duties.filter(d=>d.status==="Pending");
-  const totalPending  = pendingLeaves.length + pendingDuties.length;
   const daysInMonth   = getDays(calYear,calMonth);
   const firstDay      = getFirst(calYear,calMonth);
   const monthName     = new Date(calYear,calMonth,1).toLocaleString("default",{month:"long"});
-  const getDayLeaves  = d=>leaves.filter(l=>l.status==="Approved"&&inRange(d,l.start,l.end));
+  const getDayLeaves  = d=>leaves.filter(l=>inRange(d,l.start,l.end));
   const getU          = id=>users.find(u=>u.id===id);
   const prevM = ()=>calMonth===0?(setCalMonth(11),setCalYear(y=>y-1)):setCalMonth(m=>m-1);
   const nextM = ()=>calMonth===11?(setCalMonth(0),setCalYear(y=>y+1)):setCalMonth(m=>m+1);
 
-  const balance = {
-    "Annual / Paid Leave":{total:14,used:myLeaves.filter(l=>l.type==="Annual / Paid Leave"&&l.status==="Approved").length},
-    "Conference Leave":   {total:5, used:myLeaves.filter(l=>l.type==="Conference Leave"   &&l.status==="Approved").length},
-  };
+  const filtLeaves = myLeaves;
+  const filtDuties = myDuties;
 
-  const filtLeaves = myLeaves.filter(l=>filter==="All"||l.status===filter);
-  const filtDuties = myDuties.filter(d=>dutyFilter==="All"||d.status===dutyFilter);
+  const targetYear = requestMonthFilter === "thisMonth" ? today.getFullYear() : (today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear());
+  const targetMonth = requestMonthFilter === "thisMonth" ? today.getMonth() : (today.getMonth() === 11 ? 0 : today.getMonth() + 1);
+  const filteredAllDuties = duties.filter(d => {
+    const dDate = new Date(d.date + "T00:00:00");
+    return dDate.getFullYear() === targetYear && dDate.getMonth() === targetMonth;
+  });
 
   const navItems = [
     {key:"calendar",  label:"Team Calendar", icon:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"},
     {key:"my-leaves", label:"My Requests",   icon:"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"},
-    ...((currentUser?.role==="manager"||currentUser?.role==="admin")?[{key:"approvals",label:"Approvals",icon:"M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",badge:totalPending}]:[]),
+    ...((currentUser?.role==="manager"||currentUser?.role==="admin")?[{key:"requests",label:"Requests",icon:"M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",badge:filteredAllDuties.length}]:[]),
     ...(currentUser?.role==="admin"?[{key:"admin",label:"Admin Panel",icon:"M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197"}]:[]),
     ...(currentUser?.role==="admin"?[{key:"audit-log",label:"Audit Log",icon:"M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",badge:auditLog.length>0?auditLog.length:undefined}]:[]),
   ];
@@ -432,18 +397,7 @@ export default function App() {
         <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
           <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         </div>
-        <span className="font-bold text-gray-800">LeaveSync</span>
-      </div>
-      <div className="p-3 border-b border-gray-100" style={{maxHeight:"240px",overflowY:"auto"}}>
-        <p className="text-xs text-gray-400 uppercase tracking-wide mb-2 font-semibold">Switch User</p>
-        {users.map(u=>(
-          <button key={u.id} onClick={()=>attemptSwitch(u)}
-            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs mb-0.5 transition-all ${currentUser.id===u.id?"bg-indigo-50 text-indigo-700 font-semibold":"text-gray-600 hover:bg-gray-50"}`}>
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${colorFor(u.id)}`}>{u.avatar}</div>
-            <div className="text-left min-w-0 flex-1"><div className="truncate">{u.name}</div><div className="text-xs text-gray-400 capitalize">{u.role}</div></div>
-            {passwords[u.id]&&<svg className="w-3 h-3 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>}
-          </button>
-        ))}
+        <span className="font-bold text-gray-800">TKOH Cardiac</span>
       </div>
       <nav className="p-3 flex-1">
         <p className="text-xs text-gray-400 uppercase tracking-wide mb-2 font-semibold">Navigation</p>
@@ -496,7 +450,7 @@ export default function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-gray-800 mb-1">Welcome to LeaveSync</h1>
+            <h1 className="text-2xl font-bold text-gray-800 mb-1">TKOH Cardiac Team Calendar</h1>
             <p className="text-sm text-gray-500">Select your account to continue</p>
           </div>
           <div className="space-y-2">
@@ -596,8 +550,8 @@ export default function App() {
               <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/></svg>
             </button>
             <div>
-              <h1 className="text-base font-bold text-gray-800">{{calendar:"Team Calendar","my-leaves":"My Requests",approvals:"Approvals",admin:"Admin Panel","audit-log":"Audit Log"}[view]}</h1>
-              <p className="text-xs text-gray-400 hidden sm:block">{{calendar:"Approved leaves shown","my-leaves":"Your leave & duty requests",approvals:"Review pending requests",admin:"Manage users & settings","audit-log":"History of all changes"}[view]}</p>
+              <h1 className="text-base font-bold text-gray-800">{{calendar:"Team Calendar","my-leaves":"My Requests",requests:"Requests",admin:"Admin Panel","audit-log":"Audit Log"}[view]}</h1>
+              <p className="text-xs text-gray-400 hidden sm:block">{{calendar:"All leave requests shown","my-leaves":"Your leave & duty requests",requests:"Duty requests from all users",admin:"Manage users & settings","audit-log":"History of all changes"}[view]}</p>
             </div>
           </div>
 
@@ -644,10 +598,11 @@ export default function App() {
                   {Array.from({length:daysInMonth}).map((_,i)=>{
                     const day=i+1,ds=toStr(calYear,calMonth,day),dl=getDayLeaves(ds);
                     const isToday=ds===today.toISOString().split("T")[0];
+                    const isHoliday=HK_PUBLIC_HOLIDAYS.has(ds);
                     return(
                       <div key={day} onClick={()=>dl.length>0&&setSelectedDay({ds,dl})}
-                        className={`h-16 sm:h-20 border-b border-r border-gray-100 p-1.5 transition-colors ${dl.length>0?"cursor-pointer hover:bg-indigo-50":""}`}>
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold mb-1 ${isToday?"bg-indigo-600 text-white":"text-gray-600"}`}>{day}</div>
+                        className={`h-16 sm:h-20 border-b border-r border-gray-100 p-1.5 transition-colors ${dl.length>0?"cursor-pointer hover:bg-indigo-50":""} ${isHoliday?"bg-red-50/30":""}`}>
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold mb-1 ${isToday?"bg-indigo-600 text-white":isHoliday?"text-red-500":"text-gray-600"}`}>{day}</div>
                         {dl.slice(0,2).map(l=><div key={l.id} className={`text-xs px-1 py-0.5 rounded truncate font-medium mb-0.5 ${colorFor(l.userId)} text-white leading-tight`}>{getU(l.userId)?.name.split(" ")[0]}</div>)}
                         {dl.length>2&&<div className="text-xs text-gray-400">+{dl.length-2}</div>}
                       </div>
@@ -678,17 +633,13 @@ export default function App() {
               {/* LEAVE tab */}
               {leaveTab==="leaves"&&(
                 <>
-                  <div className="flex gap-2 flex-wrap">{["All","Pending","Approved","Rejected"].map(s=><button key={s} onClick={()=>setFilter(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${filter===s?"bg-indigo-600 text-white shadow":"bg-white text-gray-500 border border-gray-200 hover:bg-gray-50"}`}>{s}</button>)}</div>
                   {filtLeaves.length===0&&<div className="text-center py-10 text-gray-400"><div className="text-3xl mb-2">🗓️</div><p className="text-sm">No leave requests found</p></div>}
                   {filtLeaves.map(l=>{
-                    const sc=STATUS_COLORS[l.status];
                     return(
-                      <div key={l.id} className={`bg-white rounded-2xl border ${sc.border} shadow-sm p-4 flex items-start gap-3`}>
-                        <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5 ${sc.dot}`}/>
+                      <div key={l.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-start gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type]}`}>{l.type}</span>
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>{l.status}</span>
                           </div>
                           <p className="text-sm text-gray-700 font-medium">{fmtDate(l.start)} → {fmtDate(l.end)}</p>
                           <p className="text-xs text-gray-400 mt-0.5">{l.reason}</p>
@@ -707,17 +658,13 @@ export default function App() {
               {/* DUTY tab */}
               {leaveTab==="duties"&&(
                 <>
-                  <div className="flex gap-2 flex-wrap">{["All","Pending","Approved","Rejected"].map(s=><button key={s} onClick={()=>setDutyFilter(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${dutyFilter===s?"bg-amber-500 text-white shadow":"bg-white text-gray-500 border border-gray-200 hover:bg-gray-50"}`}>{s}</button>)}</div>
                   {filtDuties.length===0&&<div className="text-center py-10 text-gray-400"><div className="text-3xl mb-2">📋</div><p className="text-sm">No duty requests found</p></div>}
                   {filtDuties.map(d=>{
-                    const sc=DUTY_STATUS_COLORS[d.status];
                     return(
-                      <div key={d.id} className={`bg-white rounded-2xl border ${sc.border} shadow-sm p-4 flex items-start gap-3`}>
-                        <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5 ${sc.dot}`}/>
+                      <div key={d.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-start gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Duty</span>
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>{d.status}</span>
                           </div>
                           <p className="text-sm text-gray-700 font-medium">{fmtDate(d.date)}</p>
                           <p className="text-xs text-gray-400 mt-0.5">{d.reason}</p>
@@ -734,78 +681,36 @@ export default function App() {
             </div>
           )}
 
-          {/* ══ APPROVALS ══ */}
-          {view==="approvals"&&(currentUser.role==="manager"||currentUser.role==="admin")&&(
-            <div className="space-y-4">
-              {/* Leave approvals */}
-              <div>
-                <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"/>Leave Requests
-                  {pendingLeaves.length>0&&<span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">{pendingLeaves.length} pending</span>}
-                </h3>
-                <div className="flex gap-2 flex-wrap mb-2">{["All","Pending","Approved","Rejected"].map(s=><button key={s} onClick={()=>setFilter(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${filter===s?"bg-indigo-600 text-white shadow":"bg-white text-gray-500 border border-gray-200 hover:bg-gray-50"}`}>{s}</button>)}</div>
-                {(filter==="All"?leaves:leaves.filter(l=>l.status===filter)).length===0&&<div className="text-center py-6 text-gray-400 text-sm">No leave requests</div>}
-                {(filter==="All"?leaves:leaves.filter(l=>l.status===filter)).map(l=>{
-                  const u=getU(l.userId),sc=STATUS_COLORS[l.status];
-                  return(
-                    <div key={l.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-2">
-                      <div className="flex items-start gap-3">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${colorFor(l.userId)}`}>{u?.avatar}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1"><span className="font-semibold text-gray-800 text-sm">{u?.name}</span><span className="text-gray-400 text-xs">{u?.grade}</span></div>
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type]}`}>{l.type}</span>
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>{l.status}</span>
-                          </div>
-                          <p className="text-sm text-gray-700 font-medium">{fmtDate(l.start)} → {fmtDate(l.end)}</p>
-                          <p className="text-xs text-gray-400">{l.reason}</p>
-                        </div>
-                      </div>
-                      {l.status==="Pending"&&(
-                        <div className="flex gap-2 mt-3 ml-12">
-                          <button onClick={()=>actLeave(l.id,"Approved")} className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-xl transition-all">✓ Approve</button>
-                          <button onClick={()=>actLeave(l.id,"Rejected")} className="flex-1 py-2 bg-red-100 hover:bg-red-200 text-red-600 text-sm font-semibold rounded-xl transition-all">✕ Reject</button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Duty approvals */}
-              <div className="border-t border-gray-100 pt-4">
-                <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+          {/* ══ REQUESTS ══ */}
+          {view==="requests"&&(currentUser.role==="manager"||currentUser.role==="admin")&&(
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"/>Duty Requests
-                  {pendingDuties.length>0&&<span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full">{pendingDuties.length} pending</span>}
+                  {filteredAllDuties.length>0&&<span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full">{filteredAllDuties.length} total</span>}
                 </h3>
-                <div className="flex gap-2 flex-wrap mb-2">{["All","Pending","Approved","Rejected"].map(s=><button key={s} onClick={()=>setDutyFilter(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${dutyFilter===s?"bg-amber-500 text-white shadow":"bg-white text-gray-500 border border-gray-200 hover:bg-gray-50"}`}>{s}</button>)}</div>
-                {(dutyFilter==="All"?duties:duties.filter(d=>d.status===dutyFilter)).length===0&&<div className="text-center py-6 text-gray-400 text-sm">No duty requests</div>}
-                {(dutyFilter==="All"?duties:duties.filter(d=>d.status===dutyFilter)).map(d=>{
-                  const u=getU(d.userId),sc=DUTY_STATUS_COLORS[d.status];
-                  return(
-                    <div key={d.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-2">
-                      <div className="flex items-start gap-3">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${colorFor(d.userId)}`}>{u?.avatar}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1"><span className="font-semibold text-gray-800 text-sm">{u?.name}</span><span className="text-gray-400 text-xs">{u?.grade}</span></div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Duty</span>
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>{d.status}</span>
-                          </div>
-                          <p className="text-sm text-gray-700 font-medium">{fmtDate(d.date)}</p>
-                          <p className="text-xs text-gray-400">{d.reason}</p>
-                        </div>
-                      </div>
-                      {d.status==="Pending"&&(
-                        <div className="flex gap-2 mt-3 ml-12">
-                          <button onClick={()=>actDuty(d.id,"Approved")} className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-xl transition-all">✓ Approve</button>
-                          <button onClick={()=>actDuty(d.id,"Rejected")} className="flex-1 py-2 bg-red-100 hover:bg-red-200 text-red-600 text-sm font-semibold rounded-xl transition-all">✕ Reject</button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                <div className="flex bg-gray-100 p-1 rounded-xl">
+                  <button onClick={()=>setRequestMonthFilter("thisMonth")} className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${requestMonthFilter==="thisMonth"?"bg-white text-gray-800 shadow-sm":"text-gray-500 hover:text-gray-700"}`}>This Month</button>
+                  <button onClick={()=>setRequestMonthFilter("nextMonth")} className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${requestMonthFilter==="nextMonth"?"bg-white text-gray-800 shadow-sm":"text-gray-500 hover:text-gray-700"}`}>Next Month</button>
+                </div>
               </div>
+              {filteredAllDuties.length===0&&<div className="text-center py-6 text-gray-400 text-sm">No duty requests</div>}
+              {filteredAllDuties.map(d=>{
+                const u=getU(d.userId);
+                return(
+                  <div key={d.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-2">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${colorFor(d.userId)}`}>{u?.avatar}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1"><span className="font-semibold text-gray-800 text-sm">{u?.name}</span><span className="text-gray-400 text-xs">{u?.grade}</span></div>
+                        <div className="flex items-center gap-2 mb-1"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Duty</span></div>
+                        <p className="text-sm text-gray-700 font-medium">{fmtDate(d.date)}</p>
+                        <p className="text-xs text-gray-400">{d.reason}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -814,8 +719,8 @@ export default function App() {
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center"><div className="text-2xl font-bold text-indigo-600">{users.length}</div><div className="text-xs text-gray-500 mt-1">Staff</div></div>
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center"><div className="text-2xl font-bold text-yellow-500">{totalPending}</div><div className="text-xs text-gray-500 mt-1">Pending</div></div>
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center"><div className="text-2xl font-bold text-green-500">{leaves.filter(l=>l.status==="Approved").length}</div><div className="text-xs text-gray-500 mt-1">Approved</div></div>
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center"><div className="text-2xl font-bold text-yellow-500">{leaves.length}</div><div className="text-xs text-gray-500 mt-1">Leaves</div></div>
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center"><div className="text-2xl font-bold text-green-500">{duties.length}</div><div className="text-xs text-gray-500 mt-1">Duties</div></div>
               </div>
 
               <div className="flex items-center justify-between">
@@ -831,8 +736,6 @@ export default function App() {
                 const ul=leaves.filter(l=>l.userId===u.id);
                 const ud=duties.filter(d=>d.userId===u.id);
                 const isExpanded=expandedUserId===u.id;
-                const filtUL=adminLeaveFilter==="All"?ul:ul.filter(l=>l.status===adminLeaveFilter);
-                const filtUD=adminLeaveFilter==="All"?ud:ud.filter(d=>d.status===adminLeaveFilter);
                 return(
                   <div key={u.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     {/* User row - clickable dropdown */}
@@ -847,8 +750,8 @@ export default function App() {
                         <div className="text-xs text-gray-400">{u.grade} · <span className="capitalize">{u.role}</span></div>
                       </div>
                       <div className="flex gap-2 text-xs flex-shrink-0 mr-1">
-                        <div className="text-center"><div className="font-bold text-green-500">{ul.filter(l=>l.status==="Approved").length}</div><div className="text-gray-400">OK</div></div>
-                        <div className="text-center"><div className="font-bold text-yellow-500">{ul.filter(l=>l.status==="Pending").length+ud.filter(d=>d.status==="Pending").length}</div><div className="text-gray-400">Pend</div></div>
+                        <div className="text-center"><div className="font-bold text-green-500">{ul.length}</div><div className="text-gray-400">Leave</div></div>
+                        <div className="text-center"><div className="font-bold text-yellow-500">{ud.length}</div><div className="text-gray-400">Duty</div></div>
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
                         <span onClick={e=>{e.stopPropagation();openEdit(u);}} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all cursor-pointer">
@@ -868,27 +771,19 @@ export default function App() {
                       <div className="border-t border-gray-100 bg-gray-50 p-3">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-semibold text-gray-600">Leave & Duty Records</span>
-                          <div className="flex gap-1">
-                            {["All","Pending","Approved","Rejected"].map(s=>(
-                              <button key={s} onClick={()=>setAdminLeaveFilter(s)}
-                                className={`px-2 py-1 rounded-lg text-xs font-medium transition-all ${adminLeaveFilter===s?"bg-indigo-600 text-white":"bg-white text-gray-500 border border-gray-200"}`}>{s}</button>
-                            ))}
-                          </div>
+                          {passwords[u.id] && <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded border border-gray-200 shadow-sm">Password: <span className="font-mono font-bold text-gray-800">{passwords[u.id]}</span></span>}
                         </div>
 
                         {/* Leave records */}
-                        {filtUL.length===0&&filtUD.length===0&&(
+                        {ul.length===0&&ud.length===0&&(
                           <div className="text-center py-4 text-gray-400 text-xs">No records found</div>
                         )}
-                        {filtUL.map(l=>{
-                          const sc=STATUS_COLORS[l.status];
+                        {ul.map(l=>{
                           return(
-                            <div key={l.id} className={`flex items-center gap-2 bg-white rounded-xl border ${sc.border} px-3 py-2.5 mb-1.5`}>
-                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${sc.dot}`}/>
+                            <div key={l.id} className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 px-3 py-2.5 mb-1.5">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type]}`}>{l.type}</span>
-                                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>{l.status}</span>
                                 </div>
                                 <p className="text-xs text-gray-600 font-medium mt-0.5">{fmtDate(l.start)} → {fmtDate(l.end)}</p>
                                 <p className="text-xs text-gray-400 truncate">{l.reason}</p>
@@ -900,15 +795,12 @@ export default function App() {
                             </div>
                           );
                         })}
-                        {filtUD.map(d=>{
-                          const sc=DUTY_STATUS_COLORS[d.status];
+                        {ud.map(d=>{
                           return(
-                            <div key={d.id} className={`flex items-center gap-2 bg-white rounded-xl border ${sc.border} px-3 py-2.5 mb-1.5`}>
-                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${sc.dot}`}/>
+                            <div key={d.id} className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 px-3 py-2.5 mb-1.5">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Duty</span>
-                                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>{d.status}</span>
                                 </div>
                                 <p className="text-xs text-gray-600 font-medium mt-0.5">{fmtDate(d.date)}</p>
                                 <p className="text-xs text-gray-400 truncate">{d.reason}</p>
@@ -979,23 +871,6 @@ export default function App() {
       )}
 
       {/* ════════════ SWITCH USER ════════════ */}
-      {switchTarget&&(
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={()=>setSwitchTarget(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm" onClick={e=>e.stopPropagation()}>
-            <div className="text-center mb-5">
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold mx-auto mb-3 ${colorFor(switchTarget.id)}`}>{switchTarget.avatar}</div>
-              <h3 className="font-bold text-gray-800 text-lg">{switchTarget.name}</h3>
-              <p className="text-sm text-gray-400 capitalize">{switchTarget.role} · {switchTarget.grade}</p>
-            </div>
-            <FInput label="Password" type="password" value={switchPw} onChange={v=>{setSwitchPw(v);setSwitchErr("");}} placeholder="Enter password..." autoFocus={true}/>
-            {switchErr&&<p className="text-red-500 text-xs mt-2 bg-red-50 rounded-lg px-3 py-2">{switchErr}</p>}
-            <div className="flex gap-3 mt-4">
-              <button onClick={()=>setSwitchTarget(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 py-2.5 rounded-xl font-semibold text-sm">Cancel</button>
-              <button onClick={confirmSwitch} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-semibold text-sm shadow">Login</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ════════════ PROFILE ════════════ */}
       {showProfile&&(
